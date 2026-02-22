@@ -239,53 +239,170 @@ curl http://localhost:8080/memories/my-project
 
 ---
 
-## Remote Access (LAN)
+## Remote Access
 
-Find the server's IP:
+The gateway can be reached from other machines in two ways:
+
+### Option A: Tailscale (recommended — works anywhere)
+
+Tailscale creates a secure private network between your machines, accessible from anywhere (home, office, coffee shop) without port forwarding or firewall rules.
+
+#### 1. Install Tailscale on the server (already done)
 
 ```bash
-hostname -I | awk '{print $1}'
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
 ```
 
-From any machine on the same network, point clients to `http://<server-ip>:4000/v1`:
+Server Tailscale IP: `100.104.29.113`
+
+#### 2. Install Tailscale on your other machine(s)
 
 ```bash
-# Test from remote machine
-curl http://192.168.1.185:4000/v1/models \
+# Linux
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+
+# macOS
+brew install tailscale
+sudo tailscale up
+
+# Windows — download from https://tailscale.com/download
+```
+
+Log in with the same Tailscale account (or accept a share invite). Run `tailscale status` to confirm both machines appear on the tailnet.
+
+#### 3. Use the gateway from your other machine
+
+```bash
+# Verify connectivity
+curl http://100.104.29.113:4000/health/liveliness
+
+# List models
+curl http://100.104.29.113:4000/v1/models \
   -H "Authorization: Bearer $LITELLM_MASTER_KEY"
+
+# Chat completion
+curl http://100.104.29.113:4000/v1/chat/completions \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-r1-32b",
+    "messages": [{"role": "user", "content": "Hello from my laptop!"}]
+  }'
 ```
 
-### Continue.dev (VS Code)
+#### 4. Python (OpenAI SDK via Tailscale)
 
-Add to your Continue config (`~/.continue/config.yaml`):
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://100.104.29.113:4000/v1",
+    api_key="your-litellm-master-key",
+)
+
+response = client.chat.completions.create(
+    model="deepseek-r1-32b",
+    messages=[{"role": "user", "content": "Hello from my laptop!"}],
+)
+print(response.choices[0].message.content)
+```
+
+#### 5. Continue.dev (VS Code on remote machine)
+
+Add to `~/.continue/config.yaml` on the remote machine:
 
 ```yaml
 models:
   - model: deepseek-r1-32b
     title: DeepSeek R1 32B
     provider: openai
-    apiBase: http://192.168.1.185:4000/v1
+    apiBase: http://100.104.29.113:4000/v1
     apiKey: your-litellm-master-key
 
   - model: deepseek-v2-16b
     title: DeepSeek V2 16B
     provider: openai
-    apiBase: http://192.168.1.185:4000/v1
+    apiBase: http://100.104.29.113:4000/v1
     apiKey: your-litellm-master-key
+
+  - model: deepseek-r1-70b
+    title: DeepSeek R1 70B (Heavy)
+    provider: openai
+    apiBase: http://100.104.29.113:4000/v1
+    apiKey: your-litellm-master-key
+
+tabAutocompleteModel:
+  model: deepseek-v2-16b
+  title: Autocomplete
+  provider: openai
+  apiBase: http://100.104.29.113:4000/v1
+  apiKey: your-litellm-master-key
+
+embeddingsProvider:
+  model: nomic-embed-text
+  provider: openai
+  apiBase: http://100.104.29.113:4000/v1
+  apiKey: your-litellm-master-key
 ```
 
-### Environment variable (any OpenAI-compatible app)
+#### 6. Environment variable (any OpenAI-compatible app)
 
 ```bash
-export OPENAI_API_BASE=http://192.168.1.185:4000/v1
+export OPENAI_API_BASE=http://100.104.29.113:4000/v1
 export OPENAI_API_KEY=your-litellm-master-key
 ```
 
-### Firewall
+This works with any tool that supports the OpenAI API: `aider`, `shell-gpt`, `llm`, Cursor, Windsurf, etc.
 
-If `ufw` is active, allow the gateway port:
+#### 7. Access other services via Tailscale
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| LiteLLM Gateway | `http://100.104.29.113:4000` | Main API (OpenAI-compatible) |
+| Speaches STT/TTS | `http://100.104.29.113:8000` | Whisper + Kokoro (OpenAI-compatible) |
+| Fish Speech TTS | `http://100.104.29.113:8001` | Gradio WebUI + API |
+| XTTS-v2 TTS | `http://100.104.29.113:8002` | Voice cloning API |
+| Mem0 Memory | `http://100.104.29.113:8080` | Project memory REST API |
+| ComfyUI | `http://100.104.29.113:8188` | Image/video generation UI |
+| Ollama (direct) | `http://100.104.29.113:11434` | For debugging |
+
+#### Tailscale tips
+
+- **MagicDNS**: If enabled in Tailscale admin, use `http://ai-is-taking-over:4000` instead of the IP.
+- **Tailscale SSH**: `tailscale ssh ai-is-taking-over` for passwordless SSH.
+- **Share with others**: Use Tailscale node sharing to give teammates access without exposing ports.
+- **Always-on**: The server stays on the tailnet as long as `tailscaled` is running (it starts on boot by default).
+
+---
+
+### Option B: LAN only (same network)
+
+If both machines are on the same local network:
 
 ```bash
+# Find server LAN IP
+hostname -I | awk '{print $1}'
+# → 192.168.1.185
+```
+
+```bash
+curl http://192.168.1.185:4000/v1/models \
+  -H "Authorization: Bearer $LITELLM_MASTER_KEY"
+```
+
+Replace `100.104.29.113` with `192.168.1.185` in all examples above.
+
+### Firewall
+
+If `ufw` is active, allow access:
+
+```bash
+# Allow Tailscale (all traffic on tailnet is already encrypted)
+sudo ufw allow in on tailscale0
+
+# Or allow LAN only
 sudo ufw allow from 192.168.1.0/24 to any port 4000
 ```
 

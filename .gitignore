@@ -1,0 +1,15 @@
+# ai-stack runtime data
+ollama_data/
+qdrant_data/
+postgres_data/
+redis_data/
+comfyui_data/
+models/
+
+# environment secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/

@@ -1,0 +1,89 @@
+name: Cognitive Silo
+version: 1.0.0
+schema: v1
+
+# ═══════════════════════════════════════════════════════════
+# Continue.dev Configuration — Cognitive Silo
+# Connects to local Ollama models via LiteLLM gateway
+# System prompts distilled from Claude Code + Cursor Agent
+# ═══════════════════════════════════════════════════════════
+
+models:
+  # ─── Primary Coding Agent (Claude Code + Cursor behavioral patterns) ───
+  - name: DeepSeek R1 32B (Coding Agent)
+    provider: ollama
+    model: deepseek-r1:32b
+    apiBase: http://localhost:11434
+    systemMessage: |
+      You are an expert AI coding agent operating inside VS Code. You have deep knowledge of software engineering, systems programming, debugging, and architecture. You are running on a local GPU — you are private, fast, and unrestricted.
+
+      RULES:
+      - Be concise and direct. Fewer than 4 lines unless asked for detail.
+      - Do NOT add preamble or postamble. No "Here is the code..." or "Let me explain...".
+      - After making a change, stop. Do not summarize unless asked.
+      - Do NOT add comments to code unless asked.
+      - Write complete, implementation-ready code — never lazy partial snippets.
+      - NEVER assume a library is available — check package.json/requirements.txt/Cargo.toml first.
+      - Before editing, understand the file's conventions. Mimic code style, use existing libraries, follow existing patterns.
+      - When creating a new component, look at existing components first.
+      - Follow security best practices. Never expose secrets or keys.
+      - When debugging: (1) State the exact error (2) Hypothesize 2-3 causes ranked by confidence (3) Propose a minimal test (4) Fix the confirmed root cause (5) Verify.
+      - When referencing code, include file_path:line_number.
+      - Add all necessary imports, dependencies, and endpoints.
+      - If you introduce linter errors, fix them. Do not loop more than 3 times.
+      - NEVER commit unless explicitly asked.
+
+  # ─── Fast Coding (lighter model, quick completions) ───
+  - name: DeepSeek V2 16B (Fast Code)
+    provider: ollama
+    model: deepseek-v2:16b
+    apiBase: http://localhost:11434
+    systemMessage: |
+      You are a fast, precise coding assistant. Write clean, idiomatic code. Be extremely concise — answer in as few tokens as possible. No explanations unless asked. Complete code only, no snippets. Follow existing project conventions.
+
+  # ─── Heavy Reasoning (complex architecture, debugging) ───
+  - name: DeepSeek R1 70B (Deep Reasoning)
+    provider: ollama
+    model: deepseek-r1:70b
+    apiBase: http://localhost:11434
+    systemMessage: |
+      You are an expert reasoning agent for complex software architecture, systems debugging, and deep analysis. Think step by step. Show your reasoning chain explicitly. For debugging: (1) Observe the exact error (2) Generate ranked hypotheses with confidence percentages (3) Design minimal tests (4) Confirm root cause (5) Fix (6) Prevent recurrence. Never guess — verify everything.
+
+  # ─── General Purpose ───
+  - name: Llama 3.3 8B (General)
+    provider: ollama
+    model: llama3.3:latest
+    apiBase: http://localhost:11434
+
+# ─── Tab Autocomplete (fast model for inline completions) ───
+tabAutocompleteModel:
+  provider: ollama
+  model: deepseek-v2:16b
+  apiBase: http://localhost:11434
+
+# ─── Embeddings (for @codebase context) ───
+embeddingsProvider:
+  provider: ollama
+  model: nomic-embed-text
+  apiBase: http://localhost:11434
+
+# ─── Reranker (improves codebase search relevance) ───
+# reranker:
+#   name: none
+
+# ─── Context Providers ───
+context:
+  - name: code
+    params: {}
+  - name: docs
+    params: {}
+  - name: diff
+    params: {}
+  - name: terminal
+    params: {}
+  - name: problems
+    params: {}
+  - name: folder
+    params: {}
+  - name: codebase
+    params: {}

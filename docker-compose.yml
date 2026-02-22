@@ -51,7 +51,7 @@ services:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
     volumes:
-      - ollama_data:/root/.ollama
+      - ./models/ollama:/root/.ollama
     environment:
       - OLLAMA_NUM_PARALLEL=4
       - OLLAMA_MAX_LOADED_MODELS=2
@@ -201,7 +201,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - speaches_cache:/root/.cache
+      - ./models/speaches-cache:/home/ubuntu/.cache
     environment:
       - WHISPER__MODEL=Systran/faster-whisper-large-v3-turbo
     healthcheck:
@@ -283,9 +283,7 @@ services:
 # Named Volumes — persistent data, excluded from git
 # ═══════════════════════════════════════════════════════════
 volumes:
-  ollama_data:
   postgres_data:
   redis_data:
   qdrant_data:
-  speaches_cache:
   comfyui_data:

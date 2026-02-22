@@ -1,10 +1,11 @@
-# ai-stack runtime data
+# ai-stack runtime data (bind mounts & legacy dirs)
+models/
 ollama_data/
-qdrant_data/
 postgres_data/
+qdrant_data/
 redis_data/
 comfyui_data/
-models/
+speaches_cache/
 
 # environment secrets
 .env

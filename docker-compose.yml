@@ -1,7 +1,49 @@
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  Cognitive Silo — Full AI Infrastructure Stack              ║
+# ║  AMD Radeon PRO W7900 (48GB VRAM) · ROCm · Ollama          ║
+# ║                                                              ║
+# ║  Usage:                                                      ║
+# ║    1. cp .env.example .env  (fill in secrets)                ║
+# ║    2. docker compose up -d                                   ║
+# ║       → Init containers auto-download all models             ║
+# ║       → Services start in dependency order                   ║
+# ║                                                              ║
+# ║  Ports:                                                      ║
+# ║    4000  LiteLLM Gateway (OpenAI-compatible)                 ║
+# ║    8000  Speaches STT/TTS (Whisper + Kokoro)                 ║
+# ║    8001  Fish Speech TTS                                     ║
+# ║    8002  XTTS-v2 TTS                                         ║
+# ║    8080  Mem0 Memory API                                     ║
+# ║    8188  ComfyUI (FLUX + CogVideoX)                          ║
+# ║   11434  Ollama (direct, for debugging)                      ║
+# ╚══════════════════════════════════════════════════════════════╝
+
 services:
-  # ═══════════════════════════════════════════
+
+  # ═══════════════════════════════════════════════════════════
+  # INIT: Download HuggingFace models (one-shot, runs first)
+  # Downloads: whisper-turbo, kokoro, fish-speech, xtts-v2,
+  #            flux-schnell, cogvideox-2b
+  # ═══════════════════════════════════════════════════════════
+  model-downloader:
+    image: python:3.12-slim
+    container_name: model-downloader
+    volumes:
+      - ./models:/models
+      - ./scripts/download-models.sh:/scripts/download-models.sh:ro
+    environment:
+      - MODELS_DIR=/models
+      - HF_TOKEN=${HF_TOKEN:-}
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        pip install -q huggingface_hub[cli] && \
+        bash /scripts/download-models.sh
+    restart: "no"
+
+  # ═══════════════════════════════════════════════════════════
   # LLM Engine — Ollama (ROCm / AMD W7900)
-  # ═══════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
   ollama:
     image: ollama/ollama:rocm
     container_name: ollama-w7900
@@ -9,39 +51,121 @@ services:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
     volumes:
-      - ./ollama_data:/root/.ollama
+      - ollama_data:/root/.ollama
     environment:
       - OLLAMA_NUM_PARALLEL=4
       - OLLAMA_MAX_LOADED_MODELS=2
       - OLLAMA_CONTEXT_LENGTH=8192
     ports:
-      - "11434:11434"        # exposed for local debugging; Tailscale protects the host
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11434'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
     restart: always
 
-  # ═══════════════════════════════════════════
-  # API Gateway & Project Router — LiteLLM
-  # ═══════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
+  # INIT: Pull Ollama models (one-shot, after Ollama healthy)
+  # Pulls: deepseek-r1:32b, deepseek-v2:16b, deepseek-r1:70b,
+  #        llama3.3, nomic-embed-text
+  # ═══════════════════════════════════════════════════════════
+  ollama-init:
+    image: python:3.12-slim
+    container_name: ollama-init
+    volumes:
+      - ./scripts/ollama-init.sh:/scripts/ollama-init.sh:ro
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["bash", "-c", "apt-get update -qq && apt-get install -y -qq curl > /dev/null && bash /scripts/ollama-init.sh"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  # ═══════════════════════════════════════════════════════════
+  # Postgres — LiteLLM persistence
+  # ═══════════════════════════════════════════════════════════
+  db:
+    image: postgres:16
+    container_name: litellm-postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+
+  # ═══════════════════════════════════════════════════════════
+  # Redis — cache / rate-limit backend
+  # ═══════════════════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+
+  # ═══════════════════════════════════════════════════════════
+  # Qdrant — Vector DB for Mem0
+  # ═══════════════════════════════════════════════════════════
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-vectordb
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+
+  # ═══════════════════════════════════════════════════════════
+  # API Gateway — LiteLLM (OpenAI-compatible router)
+  # Routes to all local Ollama models + Speaches STT/TTS
+  # ═══════════════════════════════════════════════════════════
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
     container_name: litellm-gateway
     ports:
       - "4000:4000"
     volumes:
-      - ./litellm_config.yaml:/app/config.yaml
+      - ./litellm_config.yaml:/app/config.yaml:ro
     command: ["--config", "/app/config.yaml"]
     environment:
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/postgres
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-changeme}@db:5432/postgres
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-change-me}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
     depends_on:
       db:
-        condition: service_started
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:4000/health/readiness')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
     restart: always
 
-  # ═══════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
   # Project Memory — Mem0 API (custom build)
-  # Uses Ollama for LLM + Q ant for vectors
-  # ═══════════════════════════════════════════
+  # Uses Ollama LLM + nomic-embed-text + Qdrant vectors
+  # ═══════════════════════════════════════════════════════════
   mem0:
     build: ./mem0-api
     container_name: mem0-memory
@@ -55,77 +179,63 @@ services:
       - MEM0_EMBED_MODEL=nomic-embed-text
     depends_on:
       qdrant:
-        condition: service_started
+        condition: service_healthy
       ollama:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: always
 
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: qdrant-vectordb
-    volumes:
-      - ./qdrant_data:/qdrant/storage
-    ports:
-      - "6333:6333"          # internal; useful for debug
-    restart: always
-
-  # ═══════════════════════════════════════════
-  # Postgres — LiteLLM persistence
-  # ═══════════════════════════════════════════
-  db:
-    image: postgres:16
-    container_name: litellm-postgres
-    environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - ./postgres_data:/var/lib/postgresql/data
-    restart: always
-
-  # ═══════════════════════════════════════════
-  # Redis — optional cache / rate-limit backend
-  # ═══════════════════════════════════════════
-  redis:
-    image: redis:7-alpine
-    container_name: redis-cache
-    restart: always
-
-  # ═══════════════════════════════════════════
-  # Speech-to-Text — Speaches (Whisper + Kokoro)
-  # OpenAI-compatible STT/TTS server
-  # Serves: Whisper Large-v3 (STT) + Kokoro-82M (TTS)
-  # ═══════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
+  # Speech-to-Text + TTS — Speaches (Whisper + Kokoro)
+  # OpenAI-compatible /v1/audio/transcriptions & /v1/audio/speech
+  # Models auto-download on first request (lazy loading)
+  # ═══════════════════════════════════════════════════════════
   speaches:
-    image: ghcr.io/speaches-ai/speaches:latest
+    image: ghcr.io/speaches-ai/speaches:0.9.0-rc.3-cpu
     container_name: speaches-stt-tts
     ports:
       - "8000:8000"
     volumes:
-      - ./models/whisper-turbo:/root/.cache/huggingface/hub/whisper-turbo
-      - ./models/kokoro:/root/.cache/huggingface/hub/kokoro
+      - speaches_cache:/root/.cache
     environment:
-      - WHISPER__MODEL=Systran/faster-whisper-large-v3
-      - KOKORO__ENABLED=true
+      - WHISPER__MODEL=Systran/faster-whisper-large-v3-turbo
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     restart: always
 
-  # ═══════════════════════════════════════════
-  # Text-to-Speech — Fish Speech V1.5
+  # ═══════════════════════════════════════════════════════════
+  # Text-to-Speech — Fish Speech (OpenAudio S1-Mini)
   # Expressive, realistic voice synthesis
-  # ═══════════════════════════════════════════
+  # API: http://localhost:8001 (Gradio WebUI + API)
+  # ═══════════════════════════════════════════════════════════
   fish-speech:
     image: fishaudio/fish-speech:latest
     container_name: fish-speech-tts
     ports:
-      - "8001:8080"
+      - "8001:7860"
     volumes:
-      - ./models/fish-speech:/root/.cache/fish-speech
+      - ./models/fish-speech:/app/checkpoints/openaudio-s1-mini
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
     restart: always
 
-  # ═══════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
   # Text-to-Speech — XTTS-v2 (Coqui)
-  # Multilingual voice cloning (J.A.R.V.I.S.)
-  # ═══════════════════════════════════════════
+  # Multilingual voice cloning
+  # API: http://localhost:8002
+  # ═══════════════════════════════════════════════════════════
   xtts:
-    image: ghcr.io/coqui-ai/xtts-streaming-server:latest
+    image: ghcr.io/coqui-ai/xtts-streaming-server:latest-cpu
     container_name: xtts-v2-tts
     ports:
       - "8002:80"
@@ -133,15 +243,19 @@ services:
       - ./models/xtts-v2:/app/tts_models
     environment:
       - COQUI_TOS_AGREED=1
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
     restart: always
 
-  # ═══════════════════════════════════════════
+  # ═══════════════════════════════════════════════════════════
   # Image / Video Generation — ComfyUI
-  # FLUX.1-schnell (FP8, 17 GB) — image gen
+  # FLUX.1-schnell FP8 (17 GB) — fast image gen
   # CogVideoX-2b  (14 GB) — video gen
-  # ═══════════════════════════════════════════
+  # API: http://localhost:8188
+  # ═══════════════════════════════════════════════════════════
   comfyui:
-    image: ghcr.io/ai-dock/comfyui:rocm-latest
+    image: ghcr.io/ai-dock/comfyui:v2-rocm-6.0-runtime-22.04-v0.2.7
     container_name: comfyui-imggen
     devices:
       - /dev/kfd:/dev/kfd
@@ -151,7 +265,21 @@ services:
     volumes:
       - ./models/flux-schnell:/workspace/ComfyUI/models/checkpoints/flux-schnell
       - ./models/cogvideox-2b:/workspace/ComfyUI/models/checkpoints/cogvideox-2b
-      - ./comfyui_data:/workspace/ComfyUI/output
+      - comfyui_data:/workspace/ComfyUI/output
     environment:
       - CLI_ARGS=--listen
+    depends_on:
+      model-downloader:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+# ═══════════════════════════════════════════════════════════
+# Named Volumes — persistent data, excluded from git
+# ═══════════════════════════════════════════════════════════
+volumes:
+  ollama_data:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  speaches_cache:
+  comfyui_data:

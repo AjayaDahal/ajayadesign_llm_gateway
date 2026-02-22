@@ -27,6 +27,26 @@ model_list:
       model: ollama/llama3.3:latest
       api_base: "http://ollama:11434"
 
+  # ── Embeddings ──
+  - model_name: nomic-embed-text
+    litellm_params:
+      model: ollama/nomic-embed-text
+      api_base: "http://ollama:11434"
+
+  # ── Speech-to-Text (Speaches — OpenAI-compatible) ──
+  - model_name: whisper-turbo
+    litellm_params:
+      model: openai/deepdml/faster-whisper-large-v3-turbo-ct2
+      api_base: "http://speaches:8000/v1"
+      api_key: "not-needed"
+
+  # ── Text-to-Speech (Speaches — OpenAI-compatible) ──
+  - model_name: kokoro-tts
+    litellm_params:
+      model: openai/speaches-ai/Kokoro-82M-v1.0-ONNX
+      api_base: "http://speaches:8000/v1"
+      api_key: "not-needed"
+
   # ── Cloud Overflow ──
   - model_name: github-fallback
     litellm_params:

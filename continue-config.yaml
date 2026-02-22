@@ -56,13 +56,13 @@ models:
     apiBase: http://localhost:11434
 
 # ─── Tab Autocomplete (fast model for inline completions) ───
-tabAutocompleteModel:
+tabAutocomplete:
   provider: ollama
   model: deepseek-v2:16b
   apiBase: http://localhost:11434
 
 # ─── Embeddings (for @codebase context) ───
-embeddingsProvider:
+embeddings:
   provider: ollama
   model: nomic-embed-text
   apiBase: http://localhost:11434
@@ -73,17 +73,10 @@ embeddingsProvider:
 
 # ─── Context Providers ───
 context:
-  - name: code
-    params: {}
-  - name: docs
-    params: {}
-  - name: diff
-    params: {}
-  - name: terminal
-    params: {}
-  - name: problems
-    params: {}
-  - name: folder
-    params: {}
-  - name: codebase
-    params: {}
+  - provider: code
+  - provider: docs
+  - provider: diff
+  - provider: terminal
+  - provider: problems
+  - provider: folder
+  - provider: codebase

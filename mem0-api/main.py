@@ -26,6 +26,7 @@ config = {
         "config": {
             "host": os.getenv("QDRANT_HOST", "qdrant"),
             "port": int(os.getenv("QDRANT_PORT", "6333")),
+            "embedding_model_dims": 768,
         },
     },
     "embedder": {

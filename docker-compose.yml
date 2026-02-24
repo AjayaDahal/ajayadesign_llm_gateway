@@ -18,6 +18,7 @@
 # ║    8004  MusicGen Playground (web UI)                        ║
 # ║    8080  Mem0 Memory API                                     ║
 # ║    8188  ComfyUI (FLUX + CogVideoX)                          ║
+# ║    9000  Dashboard (service portal + GPU monitor)            ║
 # ║    1111  ComfyUI login page (ai-dock auth)                   ║
 # ║   11434  Ollama (direct, for debugging)                      ║
 # ╚══════════════════════════════════════════════════════════════╝
@@ -59,6 +60,7 @@ services:
     environment:
       - OLLAMA_NUM_PARALLEL=4
       - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_CONTEXT_LENGTH=8192
     ports:
       - "11434:11434"
@@ -420,6 +422,24 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    restart: always
+
+  # ═══════════════════════════════════════════════════════════
+  # Dashboard — static service portal with GPU monitor
+  # Lightweight nginx serving dashboard.html
+  # ═══════════════════════════════════════════════════════════
+  dashboard:
+    image: nginx:alpine
+    container_name: cognitive-silo-dashboard
+    ports:
+      - "9000:80"
+    volumes:
+      - ./dashboard.html:/usr/share/nginx/html/index.html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
     restart: always
 
 # ═══════════════════════════════════════════════════════════

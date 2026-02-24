@@ -202,6 +202,123 @@
     font-size: 0.75rem;
   }
 
+  /* GPU Models Panel */
+  .gpu-panel {
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.3rem 1.5rem;
+    margin-bottom: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .gpu-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--green), var(--accent2), var(--accent));
+  }
+
+  .gpu-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+  }
+
+  .gpu-panel-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .gpu-panel-header .vram-total {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .vram-bar-container {
+    width: 100%;
+    height: 8px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+  }
+
+  .vram-bar {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--green), var(--accent2));
+    transition: width 0.6s ease;
+  }
+
+  .gpu-models-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .gpu-model-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.82rem;
+    transition: border-color 0.2s;
+  }
+
+  .gpu-model-chip:hover {
+    border-color: var(--accent);
+  }
+
+  .gpu-model-chip .model-name {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .gpu-model-chip .model-detail {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+  }
+
+  .gpu-model-chip .model-vram {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.72rem;
+    color: var(--accent2);
+    background: rgba(78, 205, 196, 0.1);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+  }
+
+  .gpu-empty {
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    font-style: italic;
+  }
+
+  .gpu-error {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+  }
+
+  .pulse {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
   @media (max-width: 600px) {
     body { padding: 1rem; }
     header h1 { font-size: 1.6rem; }
@@ -216,6 +333,19 @@
   <p>Private AI Infrastructure Dashboard</p>
   <span class="gpu-badge">AMD Radeon PRO W7900 · 48 GB VRAM · ROCm 6.0</span>
 </header>
+
+<div class="gpu-panel" id="gpu-panel">
+  <div class="gpu-panel-header">
+    <h2>⚡ GPU — Loaded Models</h2>
+    <span class="vram-total" id="vram-label">48 GB VRAM</span>
+  </div>
+  <div class="vram-bar-container">
+    <div class="vram-bar" id="vram-bar" style="width: 0%"></div>
+  </div>
+  <div class="gpu-models-list" id="gpu-models">
+    <span class="gpu-empty pulse">Connecting to Ollama...</span>
+  </div>
+</div>
 
 <div class="section-title">Web Interfaces</div>
 <div class="grid">
@@ -466,8 +596,78 @@ document.querySelectorAll('.card[href]').forEach(card => {
   card.href = url.toString();
 });
 
+// GPU Models — query Ollama /api/ps
+const TOTAL_VRAM_GB = 48;
+
+function formatBytes(bytes) {
+  const gb = bytes / (1024 ** 3);
+  return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(bytes / (1024 ** 2)).toFixed(0)} MB`;
+}
+
+async function checkGpuModels() {
+  const container = document.getElementById('gpu-models');
+  const bar = document.getElementById('vram-bar');
+  const label = document.getElementById('vram-label');
+
+  try {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 5000);
+    const resp = await fetch(`http://${HOST}:11434/api/ps`, { signal: ctrl.signal });
+    clearTimeout(timeout);
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const models = data.models || [];
+
+    if (models.length === 0) {
+      container.innerHTML = '<span class="gpu-empty">No models loaded — VRAM idle</span>';
+      bar.style.width = '0%';
+      label.textContent = `0 / ${TOTAL_VRAM_GB} GB VRAM`;
+      return;
+    }
+
+    let totalVram = 0;
+    container.innerHTML = models.map(m => {
+      const vram = m.size_vram || 0;
+      totalVram += vram;
+      const quant = m.details?.quantization_level || '';
+      const params = m.details?.parameter_size || '';
+      const detail = [params, quant].filter(Boolean).join(' · ');
+      // Calculate time until expiry
+      let expiryNote = '';
+      if (m.expires_at) {
+        const remaining = Math.max(0, Math.round((new Date(m.expires_at) - Date.now()) / 60000));
+        expiryNote = remaining > 0 ? `${remaining}m left` : 'expiring';
+      }
+      return `<div class="gpu-model-chip">
+        <span class="model-name">${m.name}</span>
+        ${detail ? `<span class="model-detail">${detail}</span>` : ''}
+        <span class="model-vram">${formatBytes(vram)}</span>
+        ${expiryNote ? `<span class="model-detail">${expiryNote}</span>` : ''}
+      </div>`;
+    }).join('');
+
+    const usedGb = totalVram / (1024 ** 3);
+    const pct = Math.min(100, (usedGb / TOTAL_VRAM_GB) * 100);
+    bar.style.width = `${pct.toFixed(1)}%`;
+    bar.style.background = pct > 85
+      ? `linear-gradient(90deg, var(--yellow), var(--red))`
+      : `linear-gradient(90deg, var(--green), var(--accent2))`;
+    label.textContent = `${usedGb.toFixed(1)} / ${TOTAL_VRAM_GB} GB VRAM (${pct.toFixed(0)}%)`;
+
+  } catch (e) {
+    if (container.querySelector('.pulse')) {
+      container.innerHTML = '<span class="gpu-error">Ollama unreachable — cannot read GPU state</span>';
+      bar.style.width = '0%';
+    }
+    // If we already have data, keep it and just skip this refresh
+  }
+}
+
 checkHealth();
+checkGpuModels();
 setInterval(checkHealth, 30000);
+setInterval(checkGpuModels, 10000);
 </script>
 
 </body>

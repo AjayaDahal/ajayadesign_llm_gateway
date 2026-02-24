@@ -58,3 +58,31 @@ for t in tags:
     size_gb = t.get('size', 0) / 1e9
     print(f\"  {t['name']:30s} {size_gb:.1f} GB\")
 "
+
+# ── Pre-warm default models into VRAM ──
+# deepseek-r1:32b (~20GB) + deepseek-v2:16b (~10GB) = ~30GB
+# Leaves ~18GB free for CogVideoX-2b video gen via ComfyUI
+PREWARM_MODELS=(
+  "deepseek-r1:32b"
+  "deepseek-v2:16b"
+)
+
+log "Pre-warming ${#PREWARM_MODELS[@]} models into VRAM ..."
+for model in "${PREWARM_MODELS[@]}"; do
+  log "LOADING $model into VRAM ..."
+  curl -sf "$OLLAMA_HOST/api/generate" \
+    -d "{\"model\": \"$model\", \"prompt\": \"\", \"keep_alive\": -1}" \
+    > /dev/null 2>&1 || true
+  log "LOADED $model"
+done
+
+# Verify loaded models
+log "Currently loaded in VRAM:"
+curl -sf "$OLLAMA_HOST/api/ps" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for m in data.get('models', []):
+    vram_gb = m.get('size_vram', 0) / (1024**3)
+    print(f\"  {m['name']:30s} {vram_gb:.1f} GB VRAM\")
+" 2>/dev/null || true
+log "=== Init complete ==="

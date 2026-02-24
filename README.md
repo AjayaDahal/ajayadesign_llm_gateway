@@ -53,6 +53,7 @@ Private AI infrastructure stack running on **AMD Radeon PRO W7900** (48 GB VRAM)
 | **ComfyUI** | 8188 | Custom build (`./comfyui`) | Image gen (FLUX.1-schnell) + Video gen (CogVideoX-2b) |
 | **Mem0** | 8080 | Custom build (`./mem0-api`) | Long-term project memory with per-user isolation |
 | **Qdrant** | 6333 | `qdrant/qdrant:latest` | Vector database for Mem0 embeddings |
+| **Dashboard** | 9000 | `nginx:alpine` | Service portal with live GPU monitor |
 | **PostgreSQL** | 5432 | `postgres:16` | LiteLLM persistence / analytics |
 | **Redis** | — | `redis:7-alpine` | Caching / rate limiting |
 
@@ -70,7 +71,7 @@ Private AI infrastructure stack running on **AMD Radeon PRO W7900** (48 GB VRAM)
 | Llama 3.3 | `llama3-8b` | ~42 GB | General / scripting |
 | nomic-embed-text | `nomic-embed-text` | ~300 MB | Embeddings (768 dims) |
 
-> `OLLAMA_MAX_LOADED_MODELS=2` — Ollama hot-swaps models that don't fit in VRAM simultaneously.
+> `OLLAMA_MAX_LOADED_MODELS=2` + `OLLAMA_KEEP_ALIVE=-1` — deepseek-r1:32b (~20 GB) and deepseek-v2:16b (~10 GB) are pre-warmed and stay loaded permanently (~30 GB), leaving ~18 GB for CogVideoX video gen. If a third model is requested, Ollama evicts the least-recently-used one.
 
 ### Speech
 
@@ -148,6 +149,7 @@ Once everything is up:
 | **MusicGen Playground** | [localhost:8004](http://localhost:8004) | Generate music from text descriptions |
 | **ComfyUI** | [localhost:8188](http://localhost:8188) | Node-based image/video generation workflows |
 | **Fish Speech** | [localhost:8001](http://localhost:8001) | Expressive text-to-speech with voice cloning |
+| **Dashboard** | [localhost:9000](http://localhost:9000) | Service portal, health checks, GPU model monitor |
 
 > **First time?** Open WebUI at `:3000` will ask you to create an admin account. After that you'll see all your local models ready to chat with.
 
@@ -493,6 +495,7 @@ This works with any tool that supports the OpenAI API: `aider`, `shell-gpt`, `ll
 | MusicGen | `http://100.104.29.113:8003` | Text-to-music generation |
 | Mem0 Memory | `http://100.104.29.113:8080` | Project memory REST API |
 | ComfyUI | `http://100.104.29.113:8188` | Image/video generation UI |
+| Dashboard | `http://100.104.29.113:9000` | Service portal + GPU monitor |
 | Ollama (direct) | `http://100.104.29.113:11434` | For debugging |
 
 #### Tailscale tips

@@ -12,7 +12,7 @@ token = jwt.encode(
     algorithm="HS256",
 )
 
-BASE = "http://localhost:8080/api/v1"
+BASE = "http://localhost:3000/api/v1"
 HEADERS = {
     "Authorization": f"Bearer {token}",
     "Content-Type": "application/json",
@@ -69,10 +69,11 @@ workflow = {
 }
 
 # Node mapping tells Open WebUI which nodes to patch at runtime
+# NOTE: negative_prompt excluded — Open WebUI passes None which crashes ComfyUI.
+# FLUX doesn't use a negative prompt anyway. The workflow hardcodes "" in node 7.
 workflow_nodes = [
     {"type": "model", "node_ids": ["4"], "key": "ckpt_name"},
     {"type": "prompt", "node_ids": ["6"], "key": "text"},
-    {"type": "negative_prompt", "node_ids": ["7"], "key": "text"},
     {"type": "width", "node_ids": ["5"], "key": "width"},
     {"type": "height", "node_ids": ["5"], "key": "height"},
     {"type": "steps", "node_ids": ["3"], "key": "steps"},

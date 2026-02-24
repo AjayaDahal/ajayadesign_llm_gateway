@@ -1,5 +1,5 @@
 {
-  "last_node_id": 9,
+  "last_node_id": 8,
   "last_link_id": 9,
   "nodes": [
     {
@@ -7,15 +7,17 @@
       "type": "DownloadAndLoadCogVideoModel",
       "pos": [40, 60],
       "size": [320, 150],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
       "properties": { "Node name for S&R": "DownloadAndLoadCogVideoModel" },
       "widgets_values": [
         "THUDM/CogVideoX-2b",
         "fp16",
-        false,
-        false,
         "disabled",
-        true,
-        "offload_device"
+        false,
+        "sdpa",
+        "main_device"
       ],
       "inputs": [],
       "outputs": [
@@ -28,6 +30,9 @@
       "type": "CLIPLoader",
       "pos": [40, 280],
       "size": [320, 100],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
       "properties": { "Node name for S&R": "CLIPLoader" },
       "widgets_values": [
         "t5/t5xxl_fp8_e4m3fn.safetensors",
@@ -43,6 +48,9 @@
       "type": "CogVideoTextEncode",
       "pos": [420, 60],
       "size": [400, 160],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
       "properties": { "Node name for S&R": "CogVideoTextEncode" },
       "title": "Positive Prompt",
       "widgets_values": [
@@ -62,6 +70,9 @@
       "type": "CogVideoTextEncode",
       "pos": [420, 280],
       "size": [400, 140],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
       "properties": { "Node name for S&R": "CogVideoTextEncode" },
       "title": "Negative Prompt",
       "widgets_values": [
@@ -81,6 +92,9 @@
       "type": "EmptyLatentImage",
       "pos": [420, 470],
       "size": [320, 110],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
       "properties": { "Node name for S&R": "EmptyLatentImage" },
       "widgets_values": [
         480,
@@ -97,6 +111,9 @@
       "type": "CogVideoSampler",
       "pos": [880, 60],
       "size": [340, 350],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
       "properties": { "Node name for S&R": "CogVideoSampler" },
       "widgets_values": [
         17,
@@ -120,11 +137,16 @@
       "type": "CogVideoDecode",
       "pos": [1280, 60],
       "size": [300, 200],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
       "properties": { "Node name for S&R": "CogVideoDecode" },
       "widgets_values": [
         true,
-        0,
-        0,
+        240,
+        360,
+        0.2,
+        0.2,
         true
       ],
       "inputs": [
@@ -140,6 +162,9 @@
       "type": "SaveImage",
       "pos": [1640, 60],
       "size": [320, 300],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
       "properties": { "Node name for S&R": "SaveImage" },
       "widgets_values": [
         "CogVideoX"
@@ -169,9 +194,13 @@
       "offset": [-10, 0]
     },
     "info": {
-      "name": "CogVideoX-2b Text-to-Video (Frame Extract)",
-      "description": "Generate 17 video frames from text. Outputs individual PNG frames. ~200s on W7900. Use SaveAnimatedWEBP variant for animated output.",
-      "author": "Cognitive Silo"
+      "name": "CogVideoX-2b Frames",
+      "author": "Cognitive Silo",
+      "description": "Generate 17 individual PNG frames from text using CogVideoX-2b. ~200s on W7900.",
+      "version": "1.0.0",
+      "created": "2026-02-23T00:00:00.000Z",
+      "modified": "2026-02-23T00:00:00.000Z",
+      "software": "ComfyUI"
     }
   },
   "version": 0.4

@@ -30,10 +30,10 @@ Private AI infrastructure stack running on **AMD Radeon PRO W7900** (48 GB VRAM)
         ├── llama3.3
         └── nomic-embed-text
 
- ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐
- │ Fish Speech  │  │  XTTS-v2    │  │   ComfyUI    │  │  Mem0 + Qdrant│
- │  TTS :8001   │  │  TTS :8002  │  │  :8188       │  │  Memory :8080 │
- └─────────────┘  └─────────────┘  └──────────────┘  └──────────────┘
+ ┌─────────────┐  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+ │ Fish Speech  │  │  XTTS-v2    │  │  MusicGen    │  │   ComfyUI    │  │  Mem0 + Qdrant│
+ │  TTS :8001   │  │  TTS :8002  │  │  Music :8003 │  │  :8188       │  │  Memory :8080 │
+ └─────────────┘  └─────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
 ---
@@ -46,7 +46,8 @@ Private AI infrastructure stack running on **AMD Radeon PRO W7900** (48 GB VRAM)
 | **Ollama** | 11434 | `ollama/ollama:rocm` | LLM inference on AMD GPU (ROCm) |
 | **Speaches** | 8000 | `ghcr.io/speaches-ai/speaches:0.9.0-rc.3-cpu` | Whisper STT + Kokoro TTS (OpenAI-compatible) |
 | **Fish Speech** | 8001 | `fishaudio/fish-speech:latest` | Expressive TTS via OpenAudio S1-Mini |
-| **XTTS-v2** | 8002 | `ghcr.io/coqui-ai/xtts-streaming-server:latest-cpu` | Multilingual voice cloning TTS |
+| **XTTS-v2** | 8002 | `ghcr.io/coqui-ai/xtts-streaming-server:latest-cpu` | Multilingual voice cloning TTS (58 speakers, 17 langs) |
+| **MusicGen** | 8003 | Custom build (`./musicgen-api`) | Text-to-music generation (Meta AudioCraft) |
 | **ComfyUI** | 8188 | `ghcr.io/ai-dock/comfyui:v2-rocm-6.0` | Image gen (FLUX.1-schnell) + Video gen (CogVideoX-2b) |
 | **Mem0** | 8080 | Custom build (`./mem0-api`) | Long-term project memory with per-user isolation |
 | **Qdrant** | 6333 | `qdrant/qdrant:latest` | Vector database for Mem0 embeddings |
@@ -77,6 +78,12 @@ Private AI infrastructure stack running on **AMD Radeon PRO W7900** (48 GB VRAM)
 | Kokoro 82M | `kokoro-tts` | Text-to-Speech |
 | OpenAudio S1-Mini | *(Fish Speech Gradio)* | Text-to-Speech |
 | XTTS-v2 | *(direct API)* | Voice Cloning TTS |
+
+### Music (via MusicGen API)
+
+| Model | Type |
+|-------|------|
+| MusicGen Small (300M) | Text-to-music generation |
 
 ### Creative (via ComfyUI)
 
@@ -237,6 +244,46 @@ curl -X POST http://localhost:8080/search \
 curl http://localhost:8080/memories/my-project
 ```
 
+### Music Generation (MusicGen)
+
+```bash
+# Generate music from text prompt (returns WAV file)
+curl -X POST http://localhost:8003/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "upbeat electronic dance music with heavy bass and synth leads",
+    "duration": 10.0
+  }' --output music.wav
+
+# Generate ambient background music
+curl -X POST http://localhost:8003/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "calm ambient piano with gentle strings, peaceful and relaxing",
+    "duration": 15.0,
+    "temperature": 0.8
+  }' --output ambient.wav
+
+# Check available models
+curl http://localhost:8003/models
+```
+
+### Voice Cloning (XTTS-v2)
+
+```bash
+# List available studio speakers
+curl http://localhost:8002/studio_speakers | python3 -m json.tool | head -20
+
+# Generate speech with a studio voice
+curl -X POST http://localhost:8002/tts_to_audio \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Hello from Cognitive Silo!",
+    "speaker_wav": "Claribel Dervla",
+    "language": "en"
+  }' --output cloned_voice.wav
+```
+
 ---
 
 ## Remote Access
@@ -363,7 +410,8 @@ This works with any tool that supports the OpenAI API: `aider`, `shell-gpt`, `ll
 | LiteLLM Gateway | `http://100.104.29.113:4000` | Main API (OpenAI-compatible) |
 | Speaches STT/TTS | `http://100.104.29.113:8000` | Whisper + Kokoro (OpenAI-compatible) |
 | Fish Speech TTS | `http://100.104.29.113:8001` | Gradio WebUI + API |
-| XTTS-v2 TTS | `http://100.104.29.113:8002` | Voice cloning API |
+| XTTS-v2 TTS | `http://100.104.29.113:8002` | Voice cloning API (58 speakers) |
+| MusicGen | `http://100.104.29.113:8003` | Text-to-music generation |
 | Mem0 Memory | `http://100.104.29.113:8080` | Project memory REST API |
 | ComfyUI | `http://100.104.29.113:8188` | Image/video generation UI |
 | Ollama (direct) | `http://100.104.29.113:11434` | For debugging |
@@ -412,7 +460,7 @@ sudo ufw allow from 192.168.1.0/24 to any port 4000
 
 ```
 ai-stack/
-├── docker-compose.yml        # Full stack orchestration (12 services)
+├── docker-compose.yml        # Full stack orchestration (13 services)
 ├── litellm_config.yaml       # Gateway model routing & fallbacks
 ├── .env.example              # Environment variable template
 ├── .env                      # Your secrets (git-ignored)
@@ -421,6 +469,9 @@ ai-stack/
 ├── mem0-api/
 │   ├── Dockerfile            # Python 3.12 slim + mem0ai + FastAPI
 │   └── main.py               # REST wrapper: /add, /search, /memories
+├── musicgen-api/
+│   ├── Dockerfile            # Python 3.11 slim + transformers + torch
+│   └── main.py               # REST wrapper: /generate, /health, /models
 ├── scripts/
 │   ├── download-models.sh    # HuggingFace model downloader (init container)
 │   └── ollama-init.sh        # Ollama model puller (init container)
@@ -430,7 +481,8 @@ ai-stack/
 │   ├── fish-speech/
 │   ├── xtts-v2/
 │   ├── flux-schnell/
-│   └── cogvideox-2b/
+│   ├── cogvideox-2b/
+│   └── musicgen-cache/
 └── prompts/                  # System prompt templates
 ```
 

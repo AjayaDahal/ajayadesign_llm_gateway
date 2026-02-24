@@ -12,7 +12,8 @@
 # ║    4000  LiteLLM Gateway (OpenAI-compatible)                 ║
 # ║    8000  Speaches STT/TTS (Whisper + Kokoro)                 ║
 # ║    8001  Fish Speech TTS                                     ║
-# ║    8002  XTTS-v2 TTS                                         ║
+# ║    8002  XTTS-v2 TTS (voice cloning)                         ║
+# ║    8003  MusicGen (text-to-music)                            ║
 # ║    8080  Mem0 Memory API                                     ║
 # ║    8188  ComfyUI (FLUX + CogVideoX)                          ║
 # ║   11434  Ollama (direct, for debugging)                      ║
@@ -252,6 +253,31 @@ services:
     depends_on:
       model-downloader:
         condition: service_completed_successfully
+    restart: always
+
+  # ═══════════════════════════════════════════════════════════
+  # Music Generation — MusicGen (Meta AudioCraft)
+  # Text prompt → music audio (WAV)
+  # Model: facebook/musicgen-small (300M params)
+  # API: http://localhost:8003
+  # ═══════════════════════════════════════════════════════════
+  musicgen:
+    build: ./musicgen-api
+    container_name: musicgen-music
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./models/musicgen-cache:/app/models
+    environment:
+      - MUSICGEN_MODEL=facebook/musicgen-small
+      - MAX_DURATION_SECONDS=30
+      - HF_HOME=/app/models
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8003/health')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     restart: always
 
   # ═══════════════════════════════════════════════════════════

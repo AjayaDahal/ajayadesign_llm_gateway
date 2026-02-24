@@ -336,14 +336,15 @@ services:
       - "8188:8188"
       - "1111:1111"
     volumes:
-      - ./models/flux-schnell:/workspace/ComfyUI/models/checkpoints/flux-schnell
-      - ./models/cogvideox-2b:/workspace/ComfyUI/models/checkpoints/cogvideox-2b
-      - comfyui_data:/workspace/ComfyUI/output
+      - ./models/flux-schnell/flux1-schnell-fp8.safetensors:/opt/ComfyUI/models/checkpoints/flux1-schnell-fp8.safetensors:ro
+      - ./models/cogvideox-2b:/opt/ComfyUI/models/checkpoints/cogvideox-2b
+      - comfyui_data:/opt/ComfyUI/output
     environment:
       - CLI_ARGS=--listen
       - WEB_ENABLE_AUTH=true
       - WEB_USER=admin
       - WEB_PASSWORD=${COMFYUI_PASSWORD:-comfyui}
+      - WEB_TOKEN=${COMFYUI_API_TOKEN:-cognitive-silo-comfyui-token}
     depends_on:
       model-downloader:
         condition: service_completed_successfully
@@ -380,6 +381,7 @@ services:
       - ENABLE_IMAGE_GENERATION=true
       - IMAGE_GENERATION_ENGINE=comfyui
       - COMFYUI_BASE_URL=http://comfyui:8188
+      - COMFYUI_API_KEY=${COMFYUI_API_TOKEN:-cognitive-silo-comfyui-token}
       # ── General ──
       - WEBUI_AUTH=${OPEN_WEBUI_AUTH:-true}
       - WEBUI_NAME=Cognitive Silo

@@ -404,6 +404,7 @@
 </footer>
 
 <script>
+const HOST = location.hostname || 'localhost';
 const services = [
   { name: 'Open WebUI',   url: '/api/version',     port: 3000 },
   { name: 'ComfyUI',      url: '/api/object_info',  port: 8188, headers: {'Authorization': 'Bearer cognitive-silo-comfyui-token'} },
@@ -424,7 +425,7 @@ async function checkHealth() {
     services.map(s => {
       const ctrl = new AbortController();
       const timeout = setTimeout(() => ctrl.abort(), 5000);
-      return fetch(`http://${location.hostname}:${s.port}${s.url}`, {
+      return fetch(`http://${HOST}:${s.port}${s.url}`, {
         signal: ctrl.signal,
         headers: s.headers || {},
         mode: 'no-cors'
@@ -461,7 +462,7 @@ async function checkHealth() {
 // Update hostname in card links to current host
 document.querySelectorAll('.card[href]').forEach(card => {
   const url = new URL(card.href);
-  url.hostname = location.hostname;
+  url.hostname = HOST;
   card.href = url.toString();
 });
 

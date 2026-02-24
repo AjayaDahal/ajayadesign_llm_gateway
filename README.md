@@ -126,10 +126,11 @@ docker compose up -d
 ```
 
 This single command:
-1. Downloads all HuggingFace models (whisper, kokoro, fish-speech, xtts-v2, flux-schnell, cogvideox-2b) via the `model-downloader` init container
+1. Downloads HuggingFace models (fish-speech, xtts-v2, flux-schnell, cogvideox-2b) via the `model-downloader` init container
 2. Starts Ollama with ROCm GPU passthrough
 3. Pulls all Ollama models (deepseek-r1:32b/70b, deepseek-v2:16b, llama3.3, nomic-embed-text) via the `ollama-init` init container
-4. Starts all services in dependency order with health checks
+4. Starts Speaches and auto-installs the Whisper STT model via `speaches-init`
+5. Starts all services in dependency order with health checks
 
 ### 4. Interactive setup (alternative)
 
@@ -476,13 +477,13 @@ ai-stack/
 │   ├── download-models.sh    # HuggingFace model downloader (init container)
 │   └── ollama-init.sh        # Ollama model puller (init container)
 ├── models/                   # Downloaded model weights (git-ignored)
-│   ├── whisper-turbo/
-│   ├── kokoro/
+│   ├── speaches-cache/       # Whisper + Kokoro (auto-managed by Speaches)
 │   ├── fish-speech/
 │   ├── xtts-v2/
 │   ├── flux-schnell/
 │   ├── cogvideox-2b/
-│   └── musicgen-cache/
+│   ├── musicgen-cache/
+│   └── ollama/               # Ollama model blobs
 └── prompts/                  # System prompt templates
 ```
 

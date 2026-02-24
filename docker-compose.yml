@@ -23,8 +23,8 @@ services:
 
   # ═══════════════════════════════════════════════════════════
   # INIT: Download HuggingFace models (one-shot, runs first)
-  # Downloads: whisper-turbo, kokoro, fish-speech, xtts-v2,
-  #            flux-schnell, cogvideox-2b
+  # Downloads: fish-speech, xtts-v2, flux-schnell, cogvideox-2b
+  # (Whisper & Kokoro auto-managed by Speaches container)
   # ═══════════════════════════════════════════════════════════
   model-downloader:
     image: python:3.12-slim
@@ -204,7 +204,7 @@ services:
     volumes:
       - ./models/speaches-cache:/home/ubuntu/.cache
     environment:
-      - WHISPER__MODEL=Systran/faster-whisper-large-v3-turbo
+      - WHISPER__MODEL=deepdml/faster-whisper-large-v3-turbo-ct2
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
@@ -212,6 +212,37 @@ services:
       retries: 15
       start_period: 30s
     restart: always
+
+  # ═══════════════════════════════════════════════════════════
+  # INIT: Install Speaches STT model (one-shot, after healthy)
+  # Ensures the whisper model is pre-installed for fresh deploys
+  # ═══════════════════════════════════════════════════════════
+  speaches-init:
+    image: python:3.12-slim
+    container_name: speaches-init
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        apt-get update -qq && apt-get install -y -qq curl > /dev/null
+        MODEL="deepdml/faster-whisper-large-v3-turbo-ct2"
+        echo "[speaches-init] Checking if $$MODEL is installed..."
+        INSTALLED=$(curl -sf http://speaches:8000/v1/models 2>/dev/null | python3 -c "
+        import json,sys
+        models = json.load(sys.stdin).get('data',[])
+        print(' '.join(m['id'] for m in models))
+        " 2>/dev/null || echo "")
+        if echo "$$INSTALLED" | grep -q "$$MODEL"; then
+          echo "[speaches-init] $$MODEL already installed — skipping"
+        else
+          echo "[speaches-init] Installing $$MODEL..."
+          curl -sf -X POST "http://speaches:8000/v1/models" \
+            -H "Content-Type: application/json" \
+            -d "{\"model\": \"$$MODEL\"}" && echo "[speaches-init] DONE" || echo "[speaches-init] WARN: install failed"
+        fi
+    depends_on:
+      speaches:
+        condition: service_healthy
+    restart: "no"
 
   # ═══════════════════════════════════════════════════════════
   # Text-to-Speech — Fish Speech (OpenAudio S1-Mini)
@@ -253,6 +284,12 @@ services:
     depends_on:
       model-downloader:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:80/studio_speakers -o /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     restart: always
 
   # ═══════════════════════════════════════════════════════════

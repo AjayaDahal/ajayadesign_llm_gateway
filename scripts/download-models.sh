@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  Cognitive Silo — HuggingFace Model Downloader              ║
-# ║  Downloads all speech, image, and video models              ║
+# ║  Downloads speech, image, and video models                  ║
+# ║  (Whisper & Kokoro are auto-managed by Speaches container)  ║
 # ║  Run once before `docker compose up` or via init container  ║
 # ╚══════════════════════════════════════════════════════════════╝
 set -euo pipefail
@@ -34,9 +35,9 @@ download_hf() {
 }
 
 # ── Speech Models ──
+# NOTE: Whisper and Kokoro are NOT downloaded here — Speaches auto-downloads
+# and caches them in speaches-cache on first startup via WHISPER__MODEL env var.
 log "=== Speech Models ==="
-download_hf "Systran/faster-whisper-large-v3-turbo"  "$MODELS_DIR/whisper-turbo"
-download_hf "hexgrad/Kokoro-82M"                      "$MODELS_DIR/kokoro"
 download_hf "fishaudio/openaudio-s1-mini"              "$MODELS_DIR/fish-speech"
 download_hf "coqui/XTTS-v2"                            "$MODELS_DIR/xtts-v2"
 

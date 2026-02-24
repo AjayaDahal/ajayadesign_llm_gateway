@@ -42,12 +42,14 @@ Private AI infrastructure stack running on **AMD Radeon PRO W7900** (48 GB VRAM)
 
 | Service | Port | Image | Purpose |
 |---------|------|-------|---------|
+| **Open WebUI** | 3000 | `ghcr.io/open-webui/open-webui:main` | ChatGPT-style playground (chat, TTS, STT, image gen) |
 | **LiteLLM** | 4000 | `ghcr.io/berriai/litellm:main-latest` | OpenAI-compatible API gateway with auth, routing, fallbacks |
 | **Ollama** | 11434 | `ollama/ollama:rocm` | LLM inference on AMD GPU (ROCm) |
 | **Speaches** | 8000 | `ghcr.io/speaches-ai/speaches:0.9.0-rc.3-cpu` | Whisper STT + Kokoro TTS (OpenAI-compatible) |
 | **Fish Speech** | 8001 | `fishaudio/fish-speech:latest` | Expressive TTS via OpenAudio S1-Mini |
 | **XTTS-v2** | 8002 | `ghcr.io/coqui-ai/xtts-streaming-server:latest-cpu` | Multilingual voice cloning TTS (58 speakers, 17 langs) |
-| **MusicGen** | 8003 | Custom build (`./musicgen-api`) | Text-to-music generation (Meta AudioCraft) |
+| **MusicGen API** | 8003 | Custom build (`./musicgen-api`) | Text-to-music generation (Meta AudioCraft) |
+| **MusicGen UI** | 8004 | Custom build (`./musicgen-ui`) | Gradio playground for music generation |
 | **ComfyUI** | 8188 | `ghcr.io/ai-dock/comfyui:v2-rocm-6.0` | Image gen (FLUX.1-schnell) + Video gen (CogVideoX-2b) |
 | **Mem0** | 8080 | Custom build (`./mem0-api`) | Long-term project memory with per-user isolation |
 | **Qdrant** | 6333 | `qdrant/qdrant:latest` | Vector database for Mem0 embeddings |
@@ -118,6 +120,8 @@ cp .env.example .env
 | `POSTGRES_PASSWORD` | **Yes** | PostgreSQL password |
 | `HF_TOKEN` | Recommended | HuggingFace token for gated models (Fish Speech) |
 | `GITHUB_TOKEN` | Optional | GitHub PAT for GPT-4o cloud fallback |
+| `OPEN_WEBUI_SECRET_KEY` | Optional | Open WebUI session encryption key |
+| `OPEN_WEBUI_AUTH` | Optional | Set `false` for single-user / LAN-only (default: `true`) |
 
 ### 3. Launch
 
@@ -130,9 +134,23 @@ This single command:
 2. Starts Ollama with ROCm GPU passthrough
 3. Pulls all Ollama models (deepseek-r1:32b/70b, deepseek-v2:16b, llama3.3, nomic-embed-text) via the `ollama-init` init container
 4. Starts Speaches and auto-installs the Whisper STT model via `speaches-init`
-5. Starts all services in dependency order with health checks
+5. Launches Open WebUI playground on **http://localhost:3000**
+6. Starts all services in dependency order with health checks
 
-### 4. Interactive setup (alternative)
+### 4. Open the Web UIs
+
+Once everything is up:
+
+| UI | URL | What you can do |
+|----|-----|------------------|
+| **Open WebUI** | [localhost:3000](http://localhost:3000) | Chat with LLMs, voice conversations (TTS/STT), image generation |
+| **MusicGen Playground** | [localhost:8004](http://localhost:8004) | Generate music from text descriptions |
+| **ComfyUI** | [localhost:8188](http://localhost:8188) | Node-based image/video generation workflows |
+| **Fish Speech** | [localhost:8001](http://localhost:8001) | Expressive text-to-speech with voice cloning |
+
+> **First time?** Open WebUI at `:3000` will ask you to create an admin account. After that you'll see all your local models ready to chat with.
+
+### 5. Interactive setup (alternative)
 
 ```bash
 chmod +x setup.sh
@@ -461,7 +479,7 @@ sudo ufw allow from 192.168.1.0/24 to any port 4000
 
 ```
 ai-stack/
-├── docker-compose.yml        # Full stack orchestration (13 services)
+├── docker-compose.yml        # Full stack orchestration (15 services)
 ├── litellm_config.yaml       # Gateway model routing & fallbacks
 ├── .env.example              # Environment variable template
 ├── .env                      # Your secrets (git-ignored)
@@ -473,6 +491,9 @@ ai-stack/
 ├── musicgen-api/
 │   ├── Dockerfile            # Python 3.11 slim + transformers + torch
 │   └── main.py               # REST wrapper: /generate, /health, /models
+├── musicgen-ui/
+│   ├── Dockerfile            # Python 3.11 slim + gradio
+│   └── app.py                # Gradio playground for music generation
 ├── scripts/
 │   ├── download-models.sh    # HuggingFace model downloader (init container)
 │   └── ollama-init.sh        # Ollama model puller (init container)

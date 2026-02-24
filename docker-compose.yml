@@ -9,11 +9,13 @@
 # ║       → Services start in dependency order                   ║
 # ║                                                              ║
 # ║  Ports:                                                      ║
+# ║    3000  Open WebUI (ChatGPT-style playground)               ║
 # ║    4000  LiteLLM Gateway (OpenAI-compatible)                 ║
 # ║    8000  Speaches STT/TTS (Whisper + Kokoro)                 ║
 # ║    8001  Fish Speech TTS                                     ║
 # ║    8002  XTTS-v2 TTS (voice cloning)                         ║
-# ║    8003  MusicGen (text-to-music)                            ║
+# ║    8003  MusicGen API (text-to-music)                        ║
+# ║    8004  MusicGen Playground (web UI)                        ║
 # ║    8080  Mem0 Memory API                                     ║
 # ║    8188  ComfyUI (FLUX + CogVideoX)                          ║
 # ║   11434  Ollama (direct, for debugging)                      ║
@@ -342,6 +344,76 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  # ═══════════════════════════════════════════════════════════
+  # Web UI — Open WebUI (ChatGPT-style playground)
+  # Chat with all LLMs, TTS/STT, image generation
+  # Connects to LiteLLM gateway for all models
+  # ═══════════════════════════════════════════════════════════
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    volumes:
+      - open_webui_data:/app/backend/data
+    environment:
+      # ── LLM Backend (LiteLLM gateway) ──
+      - OPENAI_API_BASE_URL=http://litellm:4000/v1
+      - OPENAI_API_KEY=${LITELLM_MASTER_KEY:-sk-change-me}
+      - OLLAMA_BASE_URL=                              # disable direct Ollama (use LiteLLM)
+      # ── Audio (Speaches — OpenAI-compatible) ──
+      - AUDIO_TTS_ENGINE=openai
+      - AUDIO_TTS_OPENAI_API_BASE_URL=http://speaches:8000/v1
+      - AUDIO_TTS_OPENAI_API_KEY=not-needed
+      - AUDIO_TTS_MODEL=kokoro-tts
+      - AUDIO_TTS_VOICE=af_heart
+      - AUDIO_STT_ENGINE=openai
+      - AUDIO_STT_OPENAI_API_BASE_URL=http://speaches:8000/v1
+      - AUDIO_STT_OPENAI_API_KEY=not-needed
+      - AUDIO_STT_MODEL=deepdml/faster-whisper-large-v3-turbo-ct2
+      # ── Image Generation (ComfyUI) ──
+      - ENABLE_IMAGE_GENERATION=true
+      - IMAGE_GENERATION_ENGINE=comfyui
+      - COMFYUI_BASE_URL=http://comfyui:8188
+      # ── General ──
+      - WEBUI_AUTH=${OPEN_WEBUI_AUTH:-true}
+      - WEBUI_NAME=Cognitive Silo
+      - WEBUI_SECRET_KEY=${OPEN_WEBUI_SECRET_KEY:-cognitive-silo-secret-2026}
+    depends_on:
+      litellm:
+        condition: service_healthy
+      speaches:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health -o /dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    restart: always
+
+  # ═══════════════════════════════════════════════════════════
+  # MusicGen Playground — Gradio Web UI
+  # Simple browser interface for text-to-music generation
+  # ═══════════════════════════════════════════════════════════
+  musicgen-ui:
+    build: ./musicgen-ui
+    container_name: musicgen-playground
+    ports:
+      - "8004:7860"
+    environment:
+      - MUSICGEN_API_URL=http://musicgen:8003
+    depends_on:
+      musicgen:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:7860/')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: always
+
 # ═══════════════════════════════════════════════════════════
 # Named Volumes — persistent data, excluded from git
 # ═══════════════════════════════════════════════════════════
@@ -350,3 +422,4 @@ volumes:
   redis_data:
   qdrant_data:
   comfyui_data:
+  open_webui_data:

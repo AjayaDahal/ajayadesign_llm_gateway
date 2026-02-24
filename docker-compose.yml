@@ -18,6 +18,7 @@
 # ║    8004  MusicGen Playground (web UI)                        ║
 # ║    8080  Mem0 Memory API                                     ║
 # ║    8188  ComfyUI (FLUX + CogVideoX)                          ║
+# ║    1111  ComfyUI login page (ai-dock auth)                   ║
 # ║   11434  Ollama (direct, for debugging)                      ║
 # ╚══════════════════════════════════════════════════════════════╝
 
@@ -333,12 +334,16 @@ services:
       - /dev/dri:/dev/dri
     ports:
       - "8188:8188"
+      - "1111:1111"
     volumes:
       - ./models/flux-schnell:/workspace/ComfyUI/models/checkpoints/flux-schnell
       - ./models/cogvideox-2b:/workspace/ComfyUI/models/checkpoints/cogvideox-2b
       - comfyui_data:/workspace/ComfyUI/output
     environment:
       - CLI_ARGS=--listen
+      - WEB_ENABLE_AUTH=true
+      - WEB_USER=admin
+      - WEB_PASSWORD=${COMFYUI_PASSWORD:-comfyui}
     depends_on:
       model-downloader:
         condition: service_completed_successfully

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cognitive Silo — AI Dashboard</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --card: #1a1a24;
+    --card-hover: #22223a;
+    --accent: #7c5cfc;
+    --accent2: #4ecdc4;
+    --text: #e8e8f0;
+    --text-dim: #8888a0;
+    --border: #2a2a3a;
+    --green: #4ade80;
+    --yellow: #facc15;
+    --red: #f87171;
+    --blue: #60a5fa;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  header h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.3rem;
+  }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 0.95rem;
+  }
+
+  .gpu-badge {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.8rem;
+    background: linear-gradient(135deg, #1e1e30, #2a2a44);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--accent2);
+  }
+
+  .section-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    margin: 2rem 0 1rem;
+    padding-left: 0.5rem;
+    border-left: 3px solid var(--accent);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.3rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card:hover {
+    background: var(--card-hover);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(124, 92, 252, 0.15);
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .card.cat-ui::before { background: var(--accent); }
+  .card.cat-llm::before { background: var(--accent2); }
+  .card.cat-speech::before { background: var(--yellow); }
+  .card.cat-media::before { background: #f472b6; }
+  .card.cat-infra::before { background: var(--blue); }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+  }
+
+  .card-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+  }
+
+  .card-port {
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    color: var(--accent);
+    background: rgba(124, 92, 252, 0.1);
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+  }
+
+  .card h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+
+  .card p {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .card-tags {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.7rem;
+    flex-wrap: wrap;
+  }
+
+  .tag {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.05);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  .tag.gpu { color: var(--green); border-color: rgba(74, 222, 128, 0.3); }
+  .tag.cpu { color: var(--yellow); border-color: rgba(250, 204, 21, 0.3); }
+  .tag.api { color: var(--blue); border-color: rgba(96, 165, 250, 0.3); }
+  .tag.web { color: #f472b6; border-color: rgba(244, 114, 182, 0.3); }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 2.5rem;
+    padding: 0.8rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.82rem;
+    color: var(--text-dim);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .status-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.warn { background: var(--yellow); }
+  .status-dot.err { background: var(--red); }
+
+  #status-text { margin-left: 0.3rem; }
+
+  footer {
+    text-align: center;
+    margin-top: 2rem;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+  }
+
+  @media (max-width: 600px) {
+    body { padding: 1rem; }
+    header h1 { font-size: 1.6rem; }
+    .grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cognitive Silo</h1>
+  <p>Private AI Infrastructure Dashboard</p>
+  <span class="gpu-badge">AMD Radeon PRO W7900 · 48 GB VRAM · ROCm 6.0</span>
+</header>
+
+<div class="section-title">Web Interfaces</div>
+<div class="grid">
+  <a class="card cat-ui" href="http://localhost:3000" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">💬</span>
+      <span class="card-port">:3000</span>
+    </div>
+    <h3>Open WebUI</h3>
+    <p>ChatGPT-style playground for all LLMs with image gen, TTS, and STT</p>
+    <div class="card-tags">
+      <span class="tag web">Web UI</span>
+      <span class="tag">Chat</span>
+      <span class="tag">Image Gen</span>
+    </div>
+  </a>
+
+  <a class="card cat-ui" href="http://localhost:8188" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🎨</span>
+      <span class="card-port">:8188</span>
+    </div>
+    <h3>ComfyUI</h3>
+    <p>Node-based image & video generation — FLUX schnell + CogVideoX-2b</p>
+    <div class="card-tags">
+      <span class="tag web">Web UI</span>
+      <span class="tag gpu">GPU</span>
+      <span class="tag">FLUX</span>
+      <span class="tag">CogVideoX</span>
+    </div>
+  </a>
+
+  <a class="card cat-ui" href="http://localhost:8004" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🎵</span>
+      <span class="card-port">:8004</span>
+    </div>
+    <h3>MusicGen Playground</h3>
+    <p>Text-to-music generation with genre presets and audio controls</p>
+    <div class="card-tags">
+      <span class="tag web">Web UI</span>
+      <span class="tag cpu">CPU</span>
+      <span class="tag">Gradio</span>
+    </div>
+  </a>
+
+  <a class="card cat-ui" href="http://localhost:8001" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🐟</span>
+      <span class="card-port">:8001</span>
+    </div>
+    <h3>Fish Speech</h3>
+    <p>Expressive text-to-speech with OpenAudio S1-Mini — voice synthesis</p>
+    <div class="card-tags">
+      <span class="tag web">Web UI</span>
+      <span class="tag cpu">CPU</span>
+      <span class="tag">Gradio</span>
+    </div>
+  </a>
+</div>
+
+<div class="section-title">LLM & AI Gateway</div>
+<div class="grid">
+  <a class="card cat-llm" href="http://localhost:4000/ui" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🚀</span>
+      <span class="card-port">:4000</span>
+    </div>
+    <h3>LiteLLM Gateway</h3>
+    <p>OpenAI-compatible API router — DeepSeek R1, Llama 3.3, embeddings</p>
+    <div class="card-tags">
+      <span class="tag api">API</span>
+      <span class="tag gpu">GPU</span>
+      <span class="tag">OpenAI-compat</span>
+    </div>
+  </a>
+
+  <a class="card cat-llm" href="http://localhost:11434" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🦙</span>
+      <span class="card-port">:11434</span>
+    </div>
+    <h3>Ollama</h3>
+    <p>Direct LLM engine — DeepSeek R1 32B/70B, V2 16B, Llama 3.3, embeddings</p>
+    <div class="card-tags">
+      <span class="tag api">API</span>
+      <span class="tag gpu">GPU (ROCm)</span>
+    </div>
+  </a>
+
+  <a class="card cat-llm" href="http://localhost:8080/health" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🧠</span>
+      <span class="card-port">:8080</span>
+    </div>
+    <h3>Mem0 Memory</h3>
+    <p>Persistent AI memory — stores & retrieves context across sessions</p>
+    <div class="card-tags">
+      <span class="tag api">API</span>
+      <span class="tag">Qdrant + Ollama</span>
+    </div>
+  </a>
+</div>
+
+<div class="section-title">Speech & Audio</div>
+<div class="grid">
+  <a class="card cat-speech" href="http://localhost:8000/docs" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🎙️</span>
+      <span class="card-port">:8000</span>
+    </div>
+    <h3>Speaches STT/TTS</h3>
+    <p>Whisper large-v3-turbo transcription + Kokoro text-to-speech</p>
+    <div class="card-tags">
+      <span class="tag api">API</span>
+      <span class="tag cpu">CPU</span>
+      <span class="tag">OpenAI-compat</span>
+    </div>
+  </a>
+
+  <a class="card cat-speech" href="http://localhost:8002" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🗣️</span>
+      <span class="card-port">:8002</span>
+    </div>
+    <h3>XTTS-v2</h3>
+    <p>Coqui voice cloning — multilingual TTS with custom voice samples</p>
+    <div class="card-tags">
+      <span class="tag api">API</span>
+      <span class="tag cpu">CPU</span>
+      <span class="tag">Voice Clone</span>
+    </div>
+  </a>
+
+  <a class="card cat-speech" href="http://localhost:8003/docs" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🎶</span>
+      <span class="card-port">:8003</span>
+    </div>
+    <h3>MusicGen API</h3>
+    <p>Meta AudioCraft — generate music from text prompts (musicgen-small)</p>
+    <div class="card-tags">
+      <span class="tag api">API</span>
+      <span class="tag cpu">CPU</span>
+      <span class="tag">FastAPI</span>
+    </div>
+  </a>
+</div>
+
+<div class="section-title">Infrastructure</div>
+<div class="grid">
+  <a class="card cat-infra" href="http://localhost:6333/dashboard" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">📊</span>
+      <span class="card-port">:6333</span>
+    </div>
+    <h3>Qdrant</h3>
+    <p>Vector database for embeddings — powers Mem0 semantic memory</p>
+    <div class="card-tags">
+      <span class="tag api">API</span>
+      <span class="tag">Vector DB</span>
+    </div>
+  </a>
+
+  <a class="card cat-infra" href="http://localhost:1111" target="_blank">
+    <div class="card-top">
+      <span class="card-icon">🔐</span>
+      <span class="card-port">:1111</span>
+    </div>
+    <h3>ComfyUI Login</h3>
+    <p>ai-dock auth gateway — login page for ComfyUI (admin / password)</p>
+    <div class="card-tags">
+      <span class="tag web">Auth</span>
+      <span class="tag">Caddy</span>
+    </div>
+  </a>
+</div>
+
+<div class="status-bar">
+  <span class="status-dot ok" id="status-dot"></span>
+  <span id="status-text">Checking services...</span>
+</div>
+
+<footer>
+  Cognitive Silo · AMD Radeon PRO W7900 · Running locally
+</footer>
+
+<script>
+const services = [
+  { name: 'Open WebUI',   url: '/api/version',     port: 3000 },
+  { name: 'ComfyUI',      url: '/api/object_info',  port: 8188, headers: {'Authorization': 'Bearer cognitive-silo-comfyui-token'} },
+  { name: 'LiteLLM',      url: '/health/readiness', port: 4000 },
+  { name: 'Ollama',       url: '/',                  port: 11434 },
+  { name: 'Speaches',     url: '/health',            port: 8000 },
+  { name: 'Fish Speech',  url: '/',                  port: 8001 },
+  { name: 'XTTS-v2',      url: '/studio_speakers',  port: 8002 },
+  { name: 'MusicGen API', url: '/health',            port: 8003 },
+  { name: 'MusicGen UI',  url: '/',                  port: 8004 },
+  { name: 'Mem0',         url: '/health',            port: 8080 },
+  { name: 'Qdrant',       url: '/',                  port: 6333 },
+];
+
+async function checkHealth() {
+  let up = 0, down = 0;
+  const results = await Promise.allSettled(
+    services.map(s => {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 5000);
+      return fetch(`http://${location.hostname}:${s.port}${s.url}`, {
+        signal: ctrl.signal,
+        headers: s.headers || {},
+        mode: 'no-cors'
+      }).then(r => {
+        clearTimeout(timeout);
+        up++;
+        return { name: s.name, ok: true };
+      }).catch(e => {
+        clearTimeout(timeout);
+        down++;
+        return { name: s.name, ok: false };
+      });
+    })
+  );
+
+  const dot = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+
+  if (down === 0) {
+    dot.className = 'status-dot ok';
+    text.textContent = `All ${up} services operational`;
+  } else if (up > 0) {
+    dot.className = 'status-dot warn';
+    const downNames = results
+      .filter(r => r.value && !r.value.ok)
+      .map(r => r.value.name);
+    text.textContent = `${up}/${up+down} up · Down: ${downNames.join(', ')}`;
+  } else {
+    dot.className = 'status-dot err';
+    text.textContent = 'All services unreachable';
+  }
+}
+
+// Update hostname in card links to current host
+document.querySelectorAll('.card[href]').forEach(card => {
+  const url = new URL(card.href);
+  url.hostname = location.hostname;
+  card.href = url.toString();
+});
+
+checkHealth();
+setInterval(checkHealth, 30000);
+</script>
+
+</body>
+</html>

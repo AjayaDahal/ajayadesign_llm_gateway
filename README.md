@@ -50,7 +50,7 @@ Private AI infrastructure stack running on **AMD Radeon PRO W7900** (48 GB VRAM)
 | **XTTS-v2** | 8002 | `ghcr.io/coqui-ai/xtts-streaming-server:latest-cpu` | Multilingual voice cloning TTS (58 speakers, 17 langs) |
 | **MusicGen API** | 8003 | Custom build (`./musicgen-api`) | Text-to-music generation (Meta AudioCraft) |
 | **MusicGen UI** | 8004 | Custom build (`./musicgen-ui`) | Gradio playground for music generation |
-| **ComfyUI** | 8188 | `ghcr.io/ai-dock/comfyui:v2-rocm-6.0` | Image gen (FLUX.1-schnell) + Video gen (CogVideoX-2b) |
+| **ComfyUI** | 8188 | Custom build (`./comfyui`) | Image gen (FLUX.1-schnell) + Video gen (CogVideoX-2b) |
 | **Mem0** | 8080 | Custom build (`./mem0-api`) | Long-term project memory with per-user isolation |
 | **Qdrant** | 6333 | `qdrant/qdrant:latest` | Vector database for Mem0 embeddings |
 | **PostgreSQL** | 5432 | `postgres:16` | LiteLLM persistence / analytics |
@@ -119,6 +119,7 @@ cp .env.example .env
 | `LITELLM_MASTER_KEY` | **Yes** | API key for gateway auth |
 | `POSTGRES_PASSWORD` | **Yes** | PostgreSQL password |
 | `HF_TOKEN` | Recommended | HuggingFace token for gated models (Fish Speech) |
+| `DIRECT_ADDRESS` | Recommended | Tailscale IP for ComfyUI remote login redirects (default: `localhost`) |
 | `GITHUB_TOKEN` | Optional | GitHub PAT for GPT-4o cloud fallback |
 | `OPEN_WEBUI_SECRET_KEY` | Optional | Open WebUI session encryption key |
 | `OPEN_WEBUI_AUTH` | Optional | Set `false` for single-user / LAN-only (default: `true`) |
@@ -302,6 +303,65 @@ curl -X POST http://localhost:8002/tts_to_audio \
     "language": "en"
   }' --output cloned_voice.wav
 ```
+
+### Video Generation (CogVideoX-2b via ComfyUI)
+
+ComfyUI handles video generation through the CogVideoX-2b model (14 GB diffusers). Two workflow JSONs are provided in `workflows/`.
+
+#### Browser (ComfyUI Web UI)
+
+1. Open **http://localhost:8188** (or `http://100.104.29.113:8188` via Tailscale)
+2. Login at the ai-dock auth page (user: `admin`, password: your `COMFYUI_PASSWORD`)
+3. Click **Load** → select `cogvideox-2b-text-to-video.json` from `workflows/`
+4. Edit the **Positive Prompt** node with your description
+5. Click **Queue Prompt** — generates 17 frames in ~200 seconds on W7900
+
+> **Tip:** The `SaveAnimatedWEBP` node outputs animated WEBP. For individual PNG frames, use the `cogvideox-2b-frames.json` workflow instead.
+
+#### Workflow nodes (what the JSON contains)
+
+```
+DownloadAndLoadCogVideoModel (THUDM/CogVideoX-2b, fp16, cpu_offload)
+    ↓ model + vae
+CLIPLoader (t5/t5xxl_fp8_e4m3fn.safetensors, sd3)
+    ↓ clip
+CogVideoTextEncode (positive prompt) + CogVideoTextEncode (negative prompt)
+    ↓ conditioning
+EmptyLatentImage (480×320)
+    ↓ latent
+CogVideoSampler (17 frames, 20 steps, cfg 6.0, CogVideoXDDIM)
+    ↓ samples
+CogVideoDecode (vae_tiling=true)
+    ↓ images
+SaveAnimatedWEBP / SaveImage
+```
+
+#### API (curl)
+
+```bash
+# Queue a CogVideoX-2b video generation via ComfyUI API
+curl -X POST http://localhost:8188/api/prompt \
+  -H "Authorization: Bearer ${COMFYUI_API_TOKEN:-cognitive-silo-comfyui-token}" \
+  -H "Content-Type: application/json" \
+  -d @workflows/cogvideox-2b-text-to-video.json
+
+# Check generation progress
+curl http://localhost:8188/api/queue \
+  -H "Authorization: Bearer ${COMFYUI_API_TOKEN:-cognitive-silo-comfyui-token}"
+```
+
+#### CogVideoX-2b settings reference
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| Resolution | 480×320 | CogVideoX-2b native; higher = slower + more VRAM |
+| Frames | 17 | Number of video frames |
+| Steps | 20 | Sampling steps (higher = better quality, slower) |
+| CFG | 6.0 | Classifier-free guidance scale |
+| Scheduler | CogVideoXDDIM | Also try `DPM++`, `Euler` |
+| Precision | fp16 | fp16 recommended for W7900 |
+| CPU Offload | true | Moves unused layers to RAM to save VRAM |
+| VAE Tiling | true | Reduces VRAM during decode |
 
 ---
 
@@ -494,9 +554,16 @@ ai-stack/
 ├── musicgen-ui/
 │   ├── Dockerfile            # Python 3.11 slim + gradio
 │   └── app.py                # Gradio playground for music generation
+├── comfyui/
+│   └── Dockerfile            # Custom ComfyUI image (CogVideoX nodes + T5-XXL)
+├── workflows/
+│   ├── cogvideox-2b-text-to-video.json   # CogVideoX animated WEBP output
+│   └── cogvideox-2b-frames.json          # CogVideoX individual PNG frames
 ├── scripts/
 │   ├── download-models.sh    # HuggingFace model downloader (init container)
+│   ├── configure-openwebui-images.py  # FLUX workflow setup for Open WebUI
 │   └── ollama-init.sh        # Ollama model puller (init container)
+├── dashboard.html            # Single-page service portal with health checks
 ├── models/                   # Downloaded model weights (git-ignored)
 │   ├── speaches-cache/       # Whisper + Kokoro (auto-managed by Speaches)
 │   ├── fish-speech/

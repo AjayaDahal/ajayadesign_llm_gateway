@@ -327,7 +327,7 @@ services:
   # API: http://localhost:8188
   # ═══════════════════════════════════════════════════════════
   comfyui:
-    image: ghcr.io/ai-dock/comfyui:v2-rocm-6.0-runtime-22.04-v0.2.7
+    build: ./comfyui
     container_name: comfyui-imggen
     devices:
       - /dev/kfd:/dev/kfd
@@ -337,7 +337,7 @@ services:
       - "1111:1111"
     volumes:
       - ./models/flux-schnell/flux1-schnell-fp8.safetensors:/opt/ComfyUI/models/checkpoints/flux1-schnell-fp8.safetensors:ro
-      - ./models/cogvideox-2b:/opt/ComfyUI/models/checkpoints/cogvideox-2b
+      - ./models/cogvideox-2b:/opt/ComfyUI/models/CogVideo/CogVideo2B
       - comfyui_data:/opt/ComfyUI/output
     environment:
       - CLI_ARGS=--listen
@@ -345,6 +345,7 @@ services:
       - WEB_USER=admin
       - WEB_PASSWORD=${COMFYUI_PASSWORD:-comfyui}
       - WEB_TOKEN=${COMFYUI_API_TOKEN:-cognitive-silo-comfyui-token}
+      - DIRECT_ADDRESS=${DIRECT_ADDRESS:-localhost}    # Tailscale IP for remote login redirects
     depends_on:
       model-downloader:
         condition: service_completed_successfully
